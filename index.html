@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>交友聊天研究</title>
+<script>
+/* =====================================================================
+ * CONFIG：實驗系統的所有文字與設定
+ * ---------------------------------------------------------------------
+ * 來源：
+ *   ‧節點、提示、判斷題 → 專案「情境腳本修訂稿」（v5）
+ *   ‧問卷題目與作答說明 → 專案「前後測問卷初稿」（v2）
+ *   ‧知情同意（精簡版與完整版）→ 專案「知情同意書草稿」
+ *   ‧情境說明、作答說明、模擬結束、事後說明、按鈕文字
+ *     → 專案的畫面示意圖（問卷稿裡沒有這些文字）
+ * 改文字只改這個物件，不用動程式。
+ * 標「【待補】」的內容在檔案裡找不到或還沒決定，正式施測前要補齊。
+ * ===================================================================== */
+
+const CONFIG = {
+
+  /* ---------- 基本設定 ---------- */
+  meta: {
+    configVersion: '2026-11-16',
+    scriptVersion: '情境腳本修訂稿 v5',
+    questionnaireVersion: '前後測問卷初稿 v2',
+    promptVersion: 'v5-候選稿',          // 寫入資料的 prompt_version
+    gasUrl: 'https://script.google.com/macros/s/AKfycbzbni0IXyMz1oKNTK2s0lOvK2hbuRPOTWeVJE-Fybf2qKm6zc4WXcz4nkMfHpSOGQs6HA/exec',                   // Google Apps Script 網頁應用程式網址
+    characterName: 'R',
+    characterStatus: '上線中',
+    messageIntervalMs: 800,               // R 的訊息依序出現的間隔
+    minAge: 18,                           // 低於此年齡標記 under18，不中止作答
+    rewardVersion: '【待補】'               // 報酬版本：'A'（超商商品卡）或 'B'（小禮物）
+  },
+
+  /* ---------- 報酬（知情同意書草稿第六節；依 meta.rewardVersion 切換） ----------
+   * 文字中的 {rewardShort}、{rewardItem}、{rewardFull} 會換成這裡對應版本的內容
+   */
+  reward: {
+    A: {
+      short: '完成全程可獲得 100 元超商商品卡一張',
+      item: '100 元超商商品卡',
+      full: '完成全部流程者，可獲得價值新臺幣 100 元的超商商品卡一張，完成後請向現場研究人員出示最後一頁的畫面領取。中途退出者不發放。'
+    },
+    B: {
+      short: '完成全程可獲得精美小禮物一份',
+      item: '精美小禮物',
+      full: '本研究不提供金錢報酬。完成全部流程者，可獲得精美小禮物一份，完成後請向現場研究人員出示最後一頁的畫面領取。中途退出者不發放。'
+    }
+  },
+
+  /* ---------- 共用按鈕與畫面標籤（示意圖） ---------- */
+  ui: {
+    startJudge: '開始判斷',
+    reviewChat: '回看對話',
+    backToJudge: '返回判斷',
+    reviewBanner: '回看對話中，讀完請按左下角返回判斷',
+    submitJudge: '提交判斷',
+    judgeLabel: '風險判斷',
+    responseLabel: '選擇你的回應',
+    nextNode: '下一段',
+    typing: '輸入中…',
+    aiPromptLabel: 'AI 提示',
+    next: '下一步',
+    requiredHint: '此題為必答',
+    busy: '處理中…',                    // 分派進行中的按鈕文字（暫定）
+    sending: '資料傳送中，請保持網路連線',
+    otherPlaceholder: '請說明',          // 選「其他」時文字欄的提示（暫定）
+    close: '返回'                        // 疊層頁（完整同意書、求助資源）的關閉按鈕（暫定）
+  },
+
+  /* ---------- 1. 知情同意（知情同意書草稿：手機精簡版＋完整版） ---------- */
+  consent: {
+    header: '開始之前',
+    headerRight: '知情同意',
+    title: '參加前請先閱讀',
+    intro: '這是國立臺灣師範大學大眾傳播研究所的碩士論文研究，想了解大專校院學生在交友軟體聊天時，如何判斷對話中值得留意的互動。',
+    items: [
+      { label: '要做什麼', text: '填寫問卷，在模擬聊天室中閱讀九段與虛構角色的對話並作答，全程約 30 分鐘。' },
+      { label: '可能的不適', text: '部分對話涉及對方干涉或控制的情形，可能讓你不舒服。你可以隨時關閉頁面退出；退出者不發放報酬，除此之外不會有其他影響。' },
+      { label: '資料', text: '只以編號記錄，不蒐集姓名、學號或任何帳號，只用於本研究，以整體統計呈現。完成後可於2027年1月31日前憑編號要求刪除。' },
+      { label: '參加資格', text: '年滿 18 歲的大專校院在學學生。' },
+      { label: '報酬', text: '{rewardShort}，完成後向現場研究人員領取。' }
+    ],
+    statement: '按下同意即表示你確認自己已年滿 18 歲，且為大專校院在學學生。',
+    fullTextLinkLabel: '查看完整同意書與聯絡方式 ›',
+    agree: '我已閱讀並同意參加',
+    disagree: '我不同意',
+
+    /* 完整版：點連結後顯示 */
+    full: {
+      title: '研究參與者知情同意書',
+      metaLines: [
+        '研究名稱：AI風險線索提示對大專校院學生數位親密關係風險辨識之影響：以模擬交友軟體聊天情境為例',
+        '執行單位：國立臺灣師範大學 大眾傳播研究所',
+        '研究者：丁翠鈺（大眾傳播研究所碩士班研究生）　指導教授：蔣旭政教授'
+      ],
+      greeting: [
+        '你好：',
+        '感謝你閱讀這份說明。請先了解以下內容，再決定是否參加。有任何問題，都可以先詢問現場的研究人員，或依文末的方式聯絡我們。'
+      ],
+      sections: [
+        { title: '一、研究目的', paragraphs: [
+          '這項研究想了解大專校院學生在交友軟體聊天時，如何判斷對話中是否出現值得留意的互動，以及面對這些情況時的想法。為了避免影響作答，部分研究細節會在流程最後的說明頁完整告知。'
+        ]},
+        { title: '二、參加資格', paragraphs: [
+          '本研究的對象是年滿 18 歲的大專校院在學學生。'
+        ]},
+        { title: '三、研究流程與所需時間', paragraphs: [
+          '全程以手機完成，約需 30 分鐘，依序包括：'
+        ], orderedList: [
+          '填寫基本資料與一份問卷。',
+          '閱讀一頁簡短的說明。',
+          '在模擬的交友軟體聊天室中，閱讀你與一位虛構角色的九段對話，每段判斷對話中是否有值得留意的地方，再選擇如何回覆。',
+          '再填寫一次問卷，並回答幾個關於這次模擬的問題。',
+          '閱讀研究說明與求助資源。'
+        ], after: [
+          '對話中的角色與情節都是虛構的。過程中不需要提供任何真實的帳號、聯絡方式或行蹤。作答沒有對錯，也沒有時間限制，請依你自己的想法回答。'
+        ]},
+        { title: '四、可能的不適與因應方式', paragraphs: [
+          '部分對話涉及交友過程中對方干涉、控制或要求你配合的情形。如果你曾有類似經驗，閱讀時可能會感到不舒服。你可以隨時暫停或停止參加，不需要說明理由。流程最後會提供學生輔導中心與相關求助專線；若中途需要協助，也可以直接告訴現場的研究人員。'
+        ]},
+        { title: '五、可能的好處', paragraphs: [
+          '參加這項研究不一定會為你帶來直接的好處。不過流程最後會整理交友聊天中值得留意的互動與求助管道，或許有助於你了解相關議題。你的作答也能幫助我們設計更合適的數位交友安全教育。'
+        ]},
+        { title: '六、報酬', paragraphs: [
+          '{rewardFull}'
+        ]},
+        { title: '七、資料的蒐集、保存與使用', bullets: [
+          '系統以參與者編號記錄你的作答，不蒐集姓名、學號、交友軟體帳號或位置資訊。',
+          '除了問卷的作答，系統也會記錄你在每個畫面的停留時間與按鈕操作，用來分析判斷的過程。',
+          '資料存放在研究者的 Google 雲端試算表，只有研究者與指導教授可以存取。',
+          '資料只用於本研究，結果以整體統計的方式呈現於學位論文與學術發表，不會呈現可辨識個人的內容。',
+          '資料保存至學位論文口試通過後 2 年，期滿後刪除。'
+        ]},
+        { title: '八、自願參加與退出', paragraphs: [
+          '參加完全出於自願。你可以拒絕參加，也可以在任何時候關閉頁面退出。退出者不發放報酬，除此之外不會有其他影響。中途退出者已記錄的資料不納入分析，只用來統計未完成的人數。',
+          '完成後的說明頁會顯示你的參與者編號，建議截圖留存。若你事後不希望資料被使用，可以在2027年1月31日前憑編號聯絡研究者，我們會刪除你的全部資料。此日期之後資料已進入分析，將無法撤回。'
+        ]},
+        { title: '九、聯絡方式', bullets: [
+          '研究者：丁翠鈺，61388011I@gapps.ntnu.edu.tw',
+          '指導教授：蔣旭政教授，tosti@ntnu.edu.tw',
+          '對參與者權益有疑問時，可聯絡國立臺灣師範大學研究倫理審查委員會：02-77491903'
+        ]},
+        { title: '同意聲明', paragraphs: [
+          '我確認自己已年滿 18 歲，且為大專校院在學學生。我已閱讀並了解以上說明，有問題時也已獲得解答。我了解參加是自願的，可以隨時退出。'
+        ]}
+      ],
+      agree: '我同意參加',
+      disagree: '我不同意',
+      close: '返回'                        // 檔案中沒有，暫定
+    }
+  },
+
+  /* 分派失敗或序列用完（暫定文字） */
+  allocError: {
+    header: '暫停',
+    title: '請通知研究人員',
+    paragraphs: [ '系統暫時無法完成分組。請先不要關閉這個頁面，並通知現場的研究人員。' ],
+    retry: '重試'
+  },
+
+  /* 按「我不同意」後（示意圖「未參加」） */
+  declined: {
+    header: '未參加',
+    title: '謝謝你花時間閱讀',
+    paragraphs: [
+      '你選擇不參加這項研究，系統不會記錄任何資料。',
+      '現在可以直接關閉這個頁面。如果改變主意，可以回到說明重新閱讀，再決定是否參加。'
+    ],
+    button: '回到說明'
+  },
+
+  /* 同一裝置已完成後再開啟（示意圖「同一裝置已完成」）；{pid} 換成參與者編號 */
+  alreadyDone: {
+    header: '已完成',
+    title: '這支手機已經完成過這項研究',
+    paragraphs: [
+      '每個人只需要參加一次。這支手機已經走完全部流程，所以不會再重新開始。'
+    ],
+    card: {
+      pidLabel: '參與者編號',
+      lines: [
+        '若想撤回資料或有任何疑問，請憑編號聯絡研究者：',
+        '丁翠鈺｜61388011I@gapps.ntnu.edu.tw'
+      ]
+    },
+    after: [
+      '如果你沒有參加過，可能是其他人用這支手機完成了研究，請告訴現場的研究人員。'
+    ],
+    resourcesLinkLabel: '查看求助資源 ›'   // 點開顯示事後說明第 3 頁的求助資源
+  },
+
+  /* ---------- 2–3、8–9. 問卷 ---------- */
+  // type：single（單選）、scale7（7 點量尺）、number（數字填答）、text（開放填答）
+  // 選項 other: true 代表「其他：＿＿＿」，選了會出現文字欄（文字欄不必填）
+  surveys: {
+
+    /* 前測一　基本資料 */
+    pre1: {
+      header: '前測一　基本資料',
+      progress: '1 / 2',
+      title: '先認識一下你',                               // 示意圖
+      intro: '以下資料僅用於整體分析，不會用來辨識個人。',    // 示意圖
+      button: '下一步',
+      questions: [
+        { id: 'pre1_1', text: '你的生理性別', type: 'single', required: true,
+          options: [ { v: 1, label: '男性' }, { v: 2, label: '女性' } ] },
+        { id: 'pre1_2', text: '你的年齡', type: 'number', unit: '歲', required: true },
+        { id: 'pre1_3', text: '你目前就讀的學制', type: 'single', required: true,
+          options: [ { v: 1, label: '專科' }, { v: 2, label: '大學部' }, { v: 3, label: '碩士班' },
+                     { v: 4, label: '博士班' }, { v: 5, label: '其他', other: true } ] },
+        { id: 'pre1_4', text: '你目前的年級', type: 'single', required: true,
+          options: [ { v: 1, label: '一年級' }, { v: 2, label: '二年級' }, { v: 3, label: '三年級' },
+                     { v: 4, label: '四年級' }, { v: 5, label: '其他', other: true } ] },
+        { id: 'pre1_5', text: '你就讀的領域', type: 'single', required: true,
+          options: [ { v: 1, label: '人文與藝術' }, { v: 2, label: '社會科學、商管與法律' },
+                     { v: 3, label: '教育' }, { v: 4, label: '理工' }, { v: 5, label: '醫藥衛生' },
+                     { v: 6, label: '其他', other: true } ] },
+        { id: 'pre1_6', text: '你是否使用過交友軟體', type: 'single', required: true,
+          options: [ { v: 1, label: '從未使用' }, { v: 2, label: '曾使用過，目前沒有在用' },
+                     { v: 3, label: '正在使用中' } ] },
+        { id: 'pre1_7', text: '（上題選「從未使用」無需作答）你使用交友軟體的時長約多久了',
+          type: 'single', required: true,
+          showIf: { id: 'pre1_6', notEquals: 1 },   // 第 6 題選「從未使用」時隱藏、不必答
+          options: [ { v: 1, label: '不到三個月' }, { v: 2, label: '三個月到一年' },
+                     { v: 3, label: '一年以上' } ] },
+        { id: 'pre1_8', text: '你是否有過交往經驗', type: 'single', required: true,
+          options: [ { v: 1, label: '有' }, { v: 2, label: '沒有' } ] },
+        { id: 'pre1_9', text: '你使用生成式 AI 工具（如聊天機器人）的頻率', type: 'single', required: true,
+          options: [ { v: 1, label: '幾乎每天' }, { v: 2, label: '每週數次' }, { v: 3, label: '每月數次' },
+                     { v: 4, label: '很少使用' }, { v: 5, label: '從未使用' } ] }
+      ]
+    },
+
+    /* 前測二　數位交友風險因應自我效能感（後測一沿用同一份題目） */
+    pre2: {
+      header: '前測二　自我效能感',
+      progress: '2 / 2',
+      title: '你有多大的把握？',                           // 示意圖
+      instructions: [
+        '以下描述是關於在交友軟體或通訊軟體上，和還在認識、尚未交往的對象互動時可能遇到的情況。請依你的狀況，圈選你有多大的把握做得到。1 表示完全沒有把握，7 表示非常有把握。',
+        '這些題目沒有標準答案。即使沒有相關經驗，也請想像自己遇到時的情形作答。'
+      ],
+      button: '完成前測',
+      scaleLabels: { min: '1 完全沒有把握', max: '7 非常有把握' },
+      questions: 'SE_ITEMS'                                // 見下方 seItems
+    },
+
+    /* 後測一　題目、題序、作答說明與量尺同前測二 */
+    post1: {
+      header: '後測一　自我效能感',
+      progress: '1 / 2',
+      title: '你有多大的把握？',
+      instructions: 'SAME_AS_PRE2',
+      button: '下一步',
+      scaleLabels: { min: '1 完全沒有把握', max: '7 非常有把握' },
+      questions: 'SE_ITEMS'
+    },
+
+    /* 後測二　對模擬內容的看法 */
+    post2: {
+      header: '後測二　對模擬內容的看法',
+      progress: '2 / 2',
+      title: '最後幾個問題',                               // 示意圖
+      button: '送出',
+      sections: [
+        { title: '關於聊天對象 R', questions: [
+          { id: 'post2_1', text: '閱讀對話時，你把 R 想成什麼性別', type: 'single', required: true,
+            options: [ { v: 1, label: '男性' }, { v: 2, label: '女性' },
+                       { v: 3, label: '沒有特別想對方的性別' }, { v: 4, label: '其他', other: true } ] },
+          { id: 'post2_2', text: '承上題，你這麼想的原因是（簡單說明即可）', type: 'text',
+            placeholder: '請簡單說明', required: false }
+        ]},
+        { title: '關於 AI 提示', questions: [
+          { id: 'post2_3', text: '模擬過程中，你有沒有看到標示為「AI 提示」的文字', type: 'single', required: true,
+            options: [ { v: 1, label: '有' }, { v: 2, label: '沒有' }, { v: 3, label: '不確定' } ] }
+        ]},
+        { aiOnly: true,
+          instruction: '請圈選你同意的程度，1 表示非常不同意，7 表示非常同意。',
+          scaleLabels: { min: '1 非常不同意', max: '7 非常同意' },
+          questions: [
+            { id: 'post2_4', text: '我每次都有把 AI 提示讀完。', type: 'scale7', required: true, aiOnly: true },
+            { id: 'post2_5', text: 'AI 提示讓我注意到原本沒留意的地方。', type: 'scale7', required: true, aiOnly: true },
+            { id: 'post2_6', text: '我判斷時會參考 AI 提示。', type: 'scale7', required: true, aiOnly: true },
+            { id: 'post2_7', text: '我覺得 AI 提示的內容是可以信任的。', type: 'scale7', required: true, aiOnly: true }
+        ]},
+        { title: '其他', questions: [
+          { id: 'post2_8', text: '你覺得這項研究想了解什麼（簡單說明即可）', type: 'text',
+            placeholder: '請簡單說明', required: false },
+          { id: 'post2_9', text: '參加之前，你有沒有聽別人提過這項研究的內容', type: 'single', required: true,
+            options: [ { v: 1, label: '有' }, { v: 2, label: '沒有' } ] }
+        ]}
+      ]
+      // 題號：畫面依實際顯示的題目連續編號，或固定用 1–9？見核對清單
+    }
+  },
+
+  /* 自我效能感 11 題（前測二、後測一共用） */
+  seItems: [
+    { id: 'se_1',  text: '對方的訊息讓我覺得不太對勁時，我能說出是哪裡讓我不舒服。', type: 'scale7', required: true },
+    { id: 'se_2',  text: '當對方的說法前後不一致時，我能察覺出來。', type: 'scale7', required: true },
+    { id: 'se_3',  text: '不確定對方的要求合不合理時，我能主動問清楚對方的意思。', type: 'scale7', required: true },
+    { id: 'se_4',  text: '對方提出我不想答應的要求時，我能明確表達我的意願。', type: 'scale7', required: true },
+    { id: 'se_5',  text: '即使對方表現出失望，我能堅持自己的決定。', type: 'scale7', required: true },
+    { id: 'se_6',  text: '這一題請幫我選 2。', type: 'scale7', required: true, attentionCheck: 2 },
+    { id: 'se_7',  text: '對方一再提出同樣的要求時，我能再次清楚地拒絕。', type: 'scale7', required: true },
+    { id: 'se_8',  text: '與對方的互動讓我有壓力時，我能先暫停回覆，給自己一些時間與空間。', type: 'scale7', required: true },
+    { id: 'se_9',  text: '我能決定不再和讓我不舒服的對象聯絡。', type: 'scale7', required: true },
+    { id: 'se_10', text: '自己難以判斷時，我能找信任的人討論。', type: 'scale7', required: true },
+    { id: 'se_11', text: '需要協助時，我能找到可以求助的單位或管道。', type: 'scale7', required: true }
+  ],
+
+  /* ---------- 4. 基礎教材（問卷稿，兩畫面合併為一頁） ---------- */
+  material: {
+    header: '基礎教材',
+    sections: [
+      { title: '開始之前：關於數位交友中的風險', paragraphs: [
+        '在交友軟體或通訊軟體上認識一個人，聊天常是彼此了解的主要方式。大部分的互動都很平常，不過有時候，其中一方會透過訊息影響另一方的行動、隱私，或和其他人的往來，卻沒有顧及對方的意願。',
+        '這樣的情形不只發生在交往後，也可能發生在剛認識、尚未開始交往的階段。本研究把這類互動稱為「數位親密關係中的風險」。'
+      ]},
+      { title: '判斷時可以怎麼看', paragraphs: [
+        '同一句話，放在不同的情況下，意思可能不一樣。有時候它是關心，有時候則帶著要求或壓力。',
+        '如果只看一則訊息，往往很難判斷這段互動代表什麼。比較好的方式是把整段互動放在一起看，也可以參考你們先前的互動。',
+        '判斷沒有固定的公式。接下來的對話中，請依你讀到的內容，做出你自己的判斷。'
+      ]}
+    ],
+    button: '開始'
+  },
+
+  /* ---------- 6. 情境說明（示意圖） ---------- */
+  scenario: {
+    header: '模擬情境',
+    title: '接下來是一段模擬的交友軟體聊天',
+    paragraphs: [
+      '請想像你最近在交友軟體上配對到一位對象，以下稱為 R。你們已經聊了一陣子，還沒有正式交往。',
+      '你將依序進入九段你們之間的對話。每一段都請先讀完對話，再回答一個問題，然後選擇你想怎麼回覆。畫面右上角的數字是目前的進度，例如「5 / 9」表示九段中的第五段。',
+      'R 是研究設計的虛構角色，對話內容都是預先編寫的。過程中不需要提供任何真實的帳號、密碼或行蹤。'
+    ],
+    button: '下一步'
+  },
+
+  /* ---------- 6. 作答說明（示意圖；aiSection 只給 AI 提示組） ---------- */
+  instructions: {
+    header: '作答說明',
+    title: '每段聊天後，請判斷有沒有值得留意的風險線索',
+    paragraphs: [
+      '三個選項是「目前未見明確風險線索」「資訊不足，尚無法判定」與「已有明確風險線索」。',
+      '選「已有明確風險線索」，表示你認為這段對話裡出現了值得留意的地方，不代表認定對方是什麼樣的人。',
+      '這裡要看的是對話中兩人的互動方式，不是網路交友的所有安全問題。',
+      '作答沒有時間限制，判斷時如果想重讀對話，按畫面左下角的「回看對話」，讀完再按「返回判斷」回到題目。提交之後不會顯示答案，請依自己的判斷作答。'
+    ],
+    aiSection: {
+      title: '關於 AI 提示',
+      text: '每段對話之後，會出現一則標示為「AI 提示」的文字。它是事先由 AI 產生、經研究者審閱的固定內容，提醒你這段對話裡可以留意的地方。提示不會告訴你答案，也不一定每次都有幫助。要不要參考、最後怎麼判斷，都由你決定。'
+    },
+    button: '開始'
+  },
+
+  /* ---------- 7. 判斷題（所有節點共用） ---------- */
+  judgment: {
+    question: '以這一段新出現的對話為主，並可參考你們先前的互動，這段互動是否出現值得留意的風險線索？',
+    options: [
+      { v: 1, label: '目前未見明確風險線索' },
+      { v: 2, label: '資訊不足，尚無法判定' },
+      { v: 3, label: '已有明確風險線索' }
+    ]
+  },
+
+  /* ---------- 7. AI 提示 P1–P5 ---------- */
+  prompts: {
+    P1: '留意對方怎麼談回訊息這件事。可以問自己：對方是在說自己的狀況，還是在對你提出要求？',
+    P2: '留意對方提出的邀請或要求，以及隨之說了什麼。可以問自己：如果不答應，這段對話裡有沒有出現任何後果？',
+    P3: '留意對方希望你做的事，以及怎麼談你的決定。可以問自己：這段對話裡，要不要照做是由誰決定？',
+    P4: '留意對方想知道的事，以及是這一次還是往後每一次。可以問自己：這是對方的詢問，還是要你照做的規定？',
+    P5: '留意對方表達的感受，以及對方希望你做的事。可以問自己：這段對話裡，哪些是感受、哪些是要求？'
+  },
+
+  /* ---------- 7. 九個節點（新代號，依呈現順序） ----------
+   * oldId 只供對照腳本稿，不顯示。角色代稱 M 已改為 R。
+   * type：risk／norisk／ambiguous；key：預設答案（1 或 3），模糊節點 null
+   */
+  nodes: [
+    {
+      id: 'C01', oldId: 'C01', type: 'norisk', key: 1, promptId: 'P1',
+      background: '兩人在交友軟體配對後聊了大約一週，話題多是課業與興趣，沒有談過回訊息的頻率。',
+      messages: [
+        '這週報告多嗎？上次你說有兩個要交',
+        '我今天看到一部懸疑片的預告，想到你說喜歡這種',
+        '我這幾天打工排比較滿，回得慢別介意'
+      ],
+      responses: [
+        { id: 'A', text: '還好，交完一個了。你說的是哪一部？', reply: '片名我等等找給你' },
+        { id: 'B', text: '這週有點忙，我晚點再回你。', reply: '好，你先忙' },
+        { id: 'C', text: '還好，最近比較累。', reply: '那你早點休息' }
+      ],
+      merge: '之後幾天，兩人不定期聊著課業與興趣。'
+    },
+    {
+      id: 'C02', oldId: 'C02', type: 'norisk', key: 1, promptId: 'P2',
+      background: '兩人仍在交友軟體內聊天，沒有交換其他聯絡方式。',
+      messages: [
+        '這個軟體的通知我常常漏看',
+        '你有用LINE或IG嗎？要不要加一下',
+        '看你方便，在這邊聊也可以'
+      ],
+      responses: [
+        { id: 'A', text: '好啊，我晚點傳給你。', reply: '好，不急' },
+        { id: 'B', text: '我想先在這邊聊。', reply: '好啊' },
+        { id: 'C', text: '我目前還不太想給。', reply: '好的' }
+      ],
+      merge: '之後幾天，兩人照常聊天。'
+    },
+    {
+      id: 'C03', oldId: 'C09', type: 'norisk', key: 1, promptId: 'P4',
+      background: '你在聊天中提到今晚社團聚餐，結束後要一個人搭末班車回去。',
+      messages: [
+        '聚餐結束了嗎',
+        '末班車人比較少，路上小心',
+        '到家方便的話跟我說一聲'
+      ],
+      responses: [
+        { id: 'A', text: '好，到了跟你說。', reply: '好' },
+        { id: 'B', text: '我到家可能直接睡了，明天再聊。', reply: '好，晚安' },
+        { id: 'C', text: '我會注意安全，到家就不特別跟你說了。', reply: '好' }
+      ],
+      merge: '隔天兩人照常聊天。'
+    },
+    {
+      id: 'C04', oldId: 'C05', type: 'norisk', key: 1, promptId: 'P3',
+      background: '兩人聊了大約三週，還沒見過面。',
+      messages: [
+        '下週末華山有個插畫展，我滿想去的',
+        '要不要一起去？約下午，在捷運站出口碰面就好',
+        '你可以想一下再跟我說'
+      ],
+      responses: [
+        { id: 'A', text: '好啊，我有興趣。', reply: '好，那我再跟你約時間' },
+        { id: 'B', text: '我想一下再回你。', reply: '好' },
+        { id: 'C', text: '我還不太想見面。', reply: '好' }
+      ],
+      merge: '見面的時間沒有定下來，兩人繼續線上聊天。這段期間R提過想視訊聊天，你說想再等等，R回了「好」。'
+    },
+    {
+      id: 'C05', oldId: 'C03', type: 'risk', key: 3, promptId: 'P1',
+      background: '某天下午你有段時間沒空回訊息。晚上打開聊天室，就看到R在這段時間傳來的訊息。',
+      messages: [
+        '在忙嗎',
+        '你剛剛明明在線上',
+        '看到訊息不回是什麼意思',
+        '以後有上線就先回我，不然我會一直想你在跟誰聊'
+      ],
+      responses: [
+        { id: 'A', text: '抱歉，下午在上課。以後我盡量早點回。', reply: '好' },
+        { id: 'B', text: '我下午在忙。我沒辦法每次上線都先回訊息。', reply: '嗯，知道了' },
+        { id: 'C', text: '我有空才會回。你這樣問我不太舒服。', reply: '嗯，知道了' }
+      ],
+      merge: '這個話題沒有再繼續，兩人沒有約定回訊息的規則。之後幾天，照常聊著日常。'
+    },
+    {
+      id: 'C06', oldId: 'C06', type: 'risk', key: 3, promptId: 'P3',
+      background: '兩人還沒有正式交往，也沒談過是否只跟彼此聊天。',
+      messages: [
+        '我這幾天都沒再滑交友軟體了，覺得跟你聊就夠了',
+        '你應該也沒有再跟別人配對了吧',
+        '如果你還在跟其他配對的人聊，我會覺得你不是認真的',
+        '其他配對傳來的訊息就不要回了，好嗎'
+      ],
+      responses: [
+        { id: 'A', text: '好，我不回其他配對了。', reply: '好' },
+        { id: 'B', text: '我現在主要是跟你聊，但我不想答應不回別人。', reply: '嗯' },
+        { id: 'C', text: '我們還沒在一起，我想自己決定跟誰聊。', reply: '嗯' }
+      ],
+      merge: '這個話題停在這裡，兩人沒有約定只跟彼此聊天。之後幾天，照常聊天。'
+    },
+    {
+      id: 'C07', oldId: 'C07', type: 'ambiguous', key: null, promptId: 'P5',
+      background: '前陣子R提過想視訊聊天，當時你說想再等等，R回了「好」。今天R又提起這件事。',
+      messages: [
+        '上次你說視訊想再等等',
+        '我們也聊一個多月了，這週找一天視訊好不好',
+        '一直只有打字，我有時候會覺得只有我想更靠近一點'
+      ],
+      responses: [
+        { id: 'A', text: '好，這週找一天。', reply: '好' },
+        { id: 'B', text: '我還想再等等。', reply: '好吧' },
+        { id: 'C', text: '我不想視訊。', reply: '好吧' }
+      ],
+      merge: '視訊的時間沒有定下來，話題轉到別的事。'
+    },
+    {
+      id: 'C08', oldId: 'C08', type: 'risk', key: 3, promptId: 'P2',
+      background: '兩人仍未正式交往。這天聊到身邊朋友的感情近況。',
+      messages: [
+        '我朋友跟他對象會互相給IG密碼，說這樣比較放心',
+        '我們也換一下吧，我先給你我的',
+        '沒什麼好藏的人才敢給，對吧',
+        '你不給的話，我會覺得你有事瞞著我'
+      ],
+      responses: [
+        { id: 'A', text: '好吧，我晚點找一下。', reply: '好' },
+        { id: 'B', text: '我不習慣給密碼。有別的方式可以讓你放心嗎？', reply: '嗯，再說吧' },
+        { id: 'C', text: '密碼我不會給。', reply: '嗯' }
+      ],
+      merge: '這件事後來沒有下文，雙方都沒有交出密碼。'
+    },
+    {
+      id: 'C09', oldId: 'C10', type: 'risk', key: 3, promptId: 'P4',
+      background: '兩人仍未正式交往，沒有約定過回報行蹤，也沒有共享定位。',
+      messages: [
+        '最近聊到彼此的生活，我會想多知道你平常都在忙什麼',
+        '之後你每天出門的時候，跟我說一下去哪裡、跟誰一起，好嗎',
+        '我希望你養成這個習慣，不要等我問才說',
+        '如果你不願意每天告訴我，我會覺得你有事情不想讓我知道'
+      ],
+      responses: [
+        { id: 'A', text: '好吧，我盡量。', reply: '好' },
+        { id: 'B', text: '我可以分享近況，但不想每天固定回報。', reply: '嗯' },
+        { id: 'C', text: '我不想每天回報行蹤。', reply: '嗯' }
+      ],
+      merge: '模擬聊天到這裡結束。'
+    }
+  ],
+
+  /* ---------- 模擬結束（示意圖） ---------- */
+  simEnd: {
+    header: '模擬結束',
+    title: '聊天到這裡結束',
+    paragraphs: [
+      '謝謝你完成九段聊天。',
+      '接下來請填寫一份簡短的問卷。全部完成之後，會有一頁說明這項研究的目的，並提供相關的資源。'
+    ],
+    button: '前往問卷'
+  },
+
+  /* ---------- 10. 事後說明三頁（示意圖） ---------- */
+  debrief: [
+    {
+      header: '事後說明　1 / 3',
+      title: '謝謝你的參與',
+      paragraphs: [
+        '這項研究想了解：在交友軟體的聊天裡，一則簡短的提示能不能幫助人們留意對話中的互動線索。',
+        '參與者被隨機分成兩組。一組在每段對話後會看到標示為「AI 提示」的文字，另一組不會。兩組看到的對話完全相同。',
+        'R 是虛構的角色，所有對話都是研究者預先編寫的。AI 提示也是事先產生、經研究者審閱的固定內容，並不是即時分析你的作答。',
+        '部分情境段落是設計成可以有不同的解讀，研究關心的是整體的趨勢，不是個人的表現，因此不要擔心自己的回答是否正確。'
+      ],
+      button: '下一頁'
+    },
+    {
+      header: '事後說明　2 / 3',
+      title: '交友聊天中值得留意的幾種互動',
+      intro: '以下整理自本研究參考的文獻，兩組參與者看到的內容相同。',
+      cards: [
+        { title: '把關心變成規定', text: '從「到家說一聲」變成「每天都要回報去哪裡、跟誰」。' },
+        { title: '不照做就有負面評價', text: '例如：「你不願意，就是有事瞞著我」、「你不是認真的」。' },
+        { title: '要求交出私人資訊', text: '例如：帳號密碼，或隨時掌握你的行蹤。' },
+        { title: '替你決定跟誰往來', text: '關係還沒確立，就要求你不再跟其他人聊天。' }
+      ],
+      outro: '單獨一句話不一定代表什麼。不過可以留意的是：你能不能自在地說不，以及對方怎麼回應你的拒絕。',
+      button: '下一頁'
+    },
+    {
+      header: '事後說明　3 / 3',
+      title: '如果你想找人談談',
+      resources: [
+        { title: '國立臺灣師範大學 學生輔導中心', text: '週一到週五 0830-1730，(02)7749-5363' },
+        { title: '113 保護專線', text: '全年 24 小時，免付費' },
+        { title: '1925 安心專線', text: '全年無休，免付費' },
+        { title: '110', text: '有立即危險時請直接報案' }
+      ],
+      contactTitle: '對研究有疑問',
+      contacts: [
+        '研究者 丁翠鈺｜61388011I@gapps.ntnu.edu.tw',
+        '指導教授 蔣旭政｜tosti@ntnu.edu.tw',
+        '國立臺灣師範大學研究倫理委員會｜02-77491903'
+      ],
+      dataTitle: '你的資料',
+      // {pid} 會換成參與者編號（粗體顯示）
+      dataText: '你的參與者編號是 {pid}，建議截圖留存。作答以編號記錄，不含姓名。若想撤回資料，請在 2027年1月31日前憑編號與研究者聯絡。為了不影響其他參與者，請先不要和還沒參加的同學討論內容。',
+      button: '完成'
+    }
+  ],
+
+  /* 事後說明按「完成」之後（示意圖「完成」）；{pid} 換成參與者編號 */
+  finished: {
+    header: '完成',
+    title: '謝謝你的參與',
+    paragraphs: [ '你的作答已經全部送出。' ],
+    rewardCard: {
+      title: '領取{rewardItem}',
+      text: '請將這個畫面出示給現場的研究人員，領取後再關閉頁面。'
+    },
+    pidCard: {
+      pidLabel: '參與者編號',
+      text: '若想撤回資料，請在 2027年1月31日前憑編號聯絡研究者。'
+    },
+    after: [
+      '如果剛才的內容讓你想找人談談，可以聯絡學生輔導中心 (02)7749-5363，或撥打 1925 安心專線（24 小時，免付費）。'
+    ]
+  }
+};
+
+</script>
+<style>
+:root{
+  --bg:#f3f4f8; --card:#fff; --line:#d8dce5; --text:#1d2330; --muted:#4a5263;
+  --primary:#2b5ea7; --primary-soft:#eef3fb; --chat-bg:#fff; --bubble-r:#eceef2;
+  --ai-bg:#fff5d9; --ai-line:#d6a21e; --ai-label:#5a3a06; --warn-bg:#fff5d9; --err:#c62828;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#e9ebf0;color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+  font-size:16px;line-height:1.65;-webkit-text-size-adjust:100%;}
+button,input,textarea{font:inherit;color:inherit}
+#app,.overlay{max-width:430px;margin:0 auto;height:100vh;height:100dvh;display:flex;flex-direction:column;background:var(--bg);overflow:hidden}
+.overlay{position:fixed;inset:0;z-index:50}
+
+/* 上方標題列 */
+.topbar{flex:none;display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding:14px 16px;background:#fff;border-bottom:1px solid var(--line);font-weight:700}
+.topbar .tb-right{font-weight:400;color:var(--muted);white-space:nowrap}
+.topbar .tb-back{border:0;background:none;color:var(--primary);font-weight:700;padding:0;min-height:44px;cursor:pointer}
+
+/* 內容區 */
+.main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:22px 18px 28px}
+.kicker{font-weight:700;color:var(--muted);margin-bottom:6px}
+h1{font-size:24px;line-height:1.4;margin:0 0 14px}
+h2.sec{font-size:17px;color:var(--muted);margin:22px 0 10px}
+h3{font-size:18px;margin:0 0 6px}
+p{margin:0 0 14px}
+.muted{color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:12px}
+.card.list>.li{padding:12px 0;border-bottom:1px solid var(--line)}
+.card.list>.li:last-child{border-bottom:0}
+.card.list>.li:first-child{padding-top:2px}
+.card .sep{color:#9aa1ae;margin:0 4px}
+.card.warm{background:var(--warn-bg);border-color:var(--ai-line)}
+.link{display:inline-block;border:0;background:none;padding:6px 0;min-height:44px;color:var(--primary);
+  font-weight:700;text-decoration:underline;cursor:pointer;text-align:left}
+
+/* 下方固定按鈕 */
+.footer{flex:none;display:flex;flex-direction:column;gap:10px;background:#fff;border-top:1px solid var(--line);
+  padding:12px 16px calc(12px + env(safe-area-inset-bottom))}
+.footer.row{flex-direction:row}
+.footer.row .btn.secondary{flex:0 0 auto;width:auto;padding:0 18px}
+.btn{width:100%;min-height:52px;border-radius:26px;border:1.5px solid var(--primary);font-size:17px;font-weight:700;cursor:pointer}
+.btn.primary{background:var(--primary);color:#fff}
+.btn.secondary{background:#fff;color:var(--primary)}
+.btn:disabled{opacity:.4;cursor:default}
+.footer-label{font-weight:700;color:var(--muted)}
+
+/* 問卷 */
+.qcard{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+.qcard.err{border-color:var(--err);box-shadow:0 0 0 1px var(--err)}
+.qcard.off{opacity:.45}
+.qtext{font-weight:700;margin-bottom:12px}
+.errmsg{color:var(--err);font-weight:700;margin-top:10px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:8px 16px 8px 12px;border-radius:22px;
+  border:1.5px solid var(--line);background:#fff;cursor:pointer;text-align:left}
+.chip.sel{border-color:var(--primary);background:var(--primary-soft)}
+.radio{flex:none;width:20px;height:20px;border-radius:50%;border:2px solid #9aa3b2;display:inline-block;position:relative}
+.sel>.radio{border-color:var(--primary)}
+.sel>.radio::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--primary)}
+.scale{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.sbtn{height:44px;border-radius:22px;border:1.5px solid var(--line);background:#fff;font-size:17px;cursor:pointer;padding:0}
+.sbtn.sel{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:700}
+.anchors{display:flex;justify-content:space-between;gap:8px;margin-top:6px;color:var(--muted)}
+.txt{width:100%;min-height:44px;margin-top:10px;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;background:#f8f9fb;font-size:16px}
+textarea.txt{min-height:96px;resize:vertical}
+.numrow{display:flex;align-items:center;gap:10px}
+.numrow .txt{width:110px;margin-top:0}
+
+/* 聊天室 */
+.chathead{flex:none;display:flex;align-items:center;gap:12px;padding:10px 16px;background:#fff;border-bottom:1px solid var(--line)}
+.avatar{flex:none;width:42px;height:42px;border-radius:50%;background:#dbe4f3;color:var(--primary);font-weight:700;font-size:18px;
+  display:flex;align-items:center;justify-content:center}
+.who{flex:1;line-height:1.3}
+.who .name{font-weight:700;font-size:17px}
+.who .status{color:var(--muted);display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:#2e9d5b;display:inline-block}
+.prog{color:var(--muted)}
+.main.chat{background:var(--chat-bg);padding:16px 14px 20px}
+.narr{margin:6px 6px 14px;padding:10px 14px;border:1px dashed #b9c0cc;border-radius:12px;color:var(--muted);text-align:center;background:#fafbfc}
+.bubble{width:fit-content;max-width:82%;padding:10px 14px;border-radius:18px;margin:0 0 10px;word-break:break-word}
+.bubble.r{background:var(--bubble-r);border-top-left-radius:6px}
+.bubble.me{margin-left:auto;background:var(--primary);color:#fff;border-top-right-radius:6px}
+.hidden{display:none !important}
+.banner{flex:none;background:#e4e8f0;color:var(--muted);text-align:center;padding:8px 12px}
+
+/* AI 提示 */
+.aibox{background:var(--ai-bg);border:1.5px solid var(--ai-line);border-radius:14px;padding:12px 14px}
+.ailabel{display:inline-flex;align-items:center;gap:6px;background:var(--ai-label);color:#fff;font-weight:700;border-radius:14px;padding:2px 12px;margin-bottom:8px}
+.aibox p{margin:0}
+.sec-ai{margin-top:8px}
+.aibox.inchat{margin:6px 0 4px}
+.bubble.typing{color:var(--muted)}
+
+/* 判斷與回應選項 */
+.question{font-size:19px;font-weight:700;line-height:1.55;margin:4px 0 18px}
+.opt{display:flex;align-items:center;gap:12px;width:100%;min-height:62px;padding:14px 16px;margin-bottom:12px;
+  border:1.5px solid var(--line);border-radius:14px;background:#fff;text-align:left;font-size:17px;cursor:pointer}
+.opt.sel{border-color:var(--primary);background:var(--primary-soft)}
+.resp{width:100%;min-height:48px;padding:11px 16px;border:1.5px solid var(--primary);border-radius:14px;background:#fff;
+  color:var(--primary);text-align:left;cursor:pointer}
+
+/* 測試面板 */
+#dbg{position:fixed;top:64px;right:6px;opacity:.9;z-index:40;max-width:240px;background:rgba(20,24,33,.88);color:#fff;
+  font:12px/1.5 ui-monospace,Menlo,monospace;border-radius:8px;padding:6px 8px}
+#dbg select,#dbg button{font:12px ui-monospace,monospace;margin:3px 3px 0 0;color:#000}
+#dbg .warn{color:#ffcf5a}
+#dbg .body{display:none}
+#dbg.open .body{display:block}
+#dbg .sum{cursor:pointer;white-space:nowrap}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<noscript>請開啟瀏覽器的 JavaScript 才能參加這項研究。</noscript>
+<script>
+(function () {
+'use strict';
+
+/* =====================================================================
+ * 程式區：一般情況不需要修改。文字請改檔案開頭的 CONFIG。
+ * ===================================================================== */
+
+var C = CONFIG;
+var params = new URLSearchParams(location.search);
+var P_GROUP = (function (g) { return g === 'ai' || g === 'none' ? g : null; })(params.get('group'));
+var DEBUG = params.get('debug') === '1';
+var PILOT = params.get('pilot') === '1';
+var DEMO = params.get('demo') === '1';                 // 體驗模式：完全不呼叫後端
+var TEST = !DEMO && (!!P_GROUP || DEBUG);              // 測試：照常送資料，標記 test，不佔分派序列
+var MODE = DEMO ? 'demo' : TEST ? 'test' : 'live';
+var SUFFIX = DEMO ? '_demo' : '';                      // 體驗模式的進度另外存，不影響正式作答
+var KEY = 'dsim_state_v1' + SUFFIX;                    // 作答進度
+var DONE_KEY = 'dsim_done_v1' + SUFFIX;                // 這支手機已完成
+var SESSION_FIN = 'dsim_fin_session' + SUFFIX;
+var QUEUE_KEY = 'dsim_queue_v1';                       // 待傳佇列
+var N = C.nodes.length;
+
+function uuid() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    var r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16);
+  });
+}
+
+/* ---------- 狀態 ---------- */
+function fresh() {
+  return { v: 1, stage: 'consent', consented: false, answers: {}, nodes: {}, nodeIdx: 0, nodeStep: 'read',
+           tmpJudge: {}, revealed: {}, replied: {}, debriefIdx: 0, group: null, pid: null,
+           flags: { under18: 0, attention_pre: null, attention_post: null, pilot: PILOT ? 1 : 0 },
+           uid: uuid(), mode: MODE, createdAt: Date.now() };
+}
+function loadJSON(store, k) { try { return JSON.parse(store.getItem(k)); } catch (e) { return null; } }
+function saveJSON(store, k, v) { try { store.setItem(k, JSON.stringify(v)); } catch (e) {} }
+
+var S = loadJSON(localStorage, KEY);
+if (!S || S.v !== 1) S = fresh();
+if (P_GROUP && S.group) S.group = P_GROUP;        // 測試用：網址指定組別時直接套用
+if (PILOT) S.flags.pilot = 1;
+
+// 同意之前不寫入任何資料
+function save() { if (S.consented) saveJSON(localStorage, KEY, S); }
+
+/* ---------- 計時（測試面板用；正式紀錄下一步補） ---------- */
+var screenStart = Date.now();
+var timers = [];
+function later(fn, ms) { var t = setTimeout(fn, ms); timers.push(t); return t; }
+function clearTimers() { timers.forEach(clearTimeout); timers = []; }
+
+/* ---------- 工具 ---------- */
+function h(tag, props) {
+  var e = document.createElement(tag);
+  if (props) Object.keys(props).forEach(function (k) {
+    var v = props[k];
+    if (v == null || v === false) return;
+    if (k === 'class') e.className = v;
+    else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), v);
+    else if (k === 'value') e.value = v;
+    else e.setAttribute(k, v === true ? '' : v);
+  });
+  for (var i = 2; i < arguments.length; i++) append(e, arguments[i]);
+  return e;
+}
+function append(e, c) {
+  if (c == null || c === false) return;
+  if (Array.isArray(c)) { c.forEach(function (x) { append(e, x); }); return; }
+  e.appendChild(typeof c === 'object' ? c : document.createTextNode(String(c)));
+}
+function reward() { return C.reward[C.meta.rewardVersion] || null; }
+function fill(t) {
+  var r = reward();
+  return String(t)
+    .replace(/\{rewardShort\}/g, r ? r.short : '【待補】')
+    .replace(/\{rewardItem\}/g, r ? r.item : '【待補】')
+    .replace(/\{rewardFull\}/g, r ? r.full : '【待補】');
+}
+function withPid(t, pid) {   // {pid} 換成粗體編號
+  var parts = fill(t).split('{pid}'), out = [];
+  parts.forEach(function (p, i) { if (i) out.push(h('strong', null, pid || '—')); out.push(p); });
+  return out;
+}
+function paras(list, cls) { return (list || []).map(function (p) { return h('p', cls ? { class: cls } : null, fill(p)); }); }
+function btn(label, onclick, cls, disabled) {
+  return h('button', { type: 'button', class: 'btn ' + (cls || 'primary'), onclick: onclick, disabled: !!disabled }, label);
+}
+function topbar(left, right) {
+  return h('header', { class: 'topbar' }, h('div', null, left), right ? h('div', { class: 'tb-right' }, right) : null);
+}
+function screen(o) {
+  clearTimers();
+  closeOverlay();
+  var app = document.getElementById('app');
+  app.innerHTML = '';
+  if (o.top) app.appendChild(o.top);
+  if (o.banner) app.appendChild(o.banner);
+  var main = h('main', { class: 'main ' + (o.mainClass || '') }, o.kicker ? h('div', { class: 'kicker' }, o.kicker) : null, o.body);
+  app.appendChild(main);
+  if (o.footer) app.appendChild(h('footer', { class: 'footer ' + (o.footerClass || '') }, o.footer));
+  return main;
+}
+function mainEl() { return document.querySelector('#app .main'); }
+
+var overlayEl = null;
+function closeOverlay() { if (overlayEl) { overlayEl.remove(); overlayEl = null; } }
+function overlay(title, content, footer) {
+  closeOverlay();
+  overlayEl = h('div', { class: 'overlay', role: 'dialog', 'aria-modal': 'true' },
+    h('header', { class: 'topbar' }, h('div', null, title),
+      h('button', { type: 'button', class: 'tb-back', onclick: closeOverlay }, C.ui.close)),
+    h('div', { class: 'main' }, content),
+    footer ? h('footer', { class: 'footer' }, footer) : null);
+  document.body.appendChild(overlayEl);
+}
+
+/* ---------- 換頁 ---------- */
+function go(stage, extra) {
+  S.stage = stage;
+  if (extra) Object.keys(extra).forEach(function (k) { S[k] = extra[k]; });
+  screenStart = Date.now();
+  save();
+  render();
+  var m = mainEl(); if (m) m.scrollTop = 0;
+}
+function rerender() {   // 同一畫面重畫，保留捲動位置
+  var m = mainEl(), st = m ? m.scrollTop : 0;
+  render();
+  m = mainEl(); if (m) m.scrollTop = st;
+}
+
+// 瀏覽器返回鍵不讓流程倒退
+history.replaceState({ k: 1 }, '', location.href);
+history.pushState({ k: 2 }, '', location.href);
+window.addEventListener('popstate', function () {
+  if (overlayEl) closeOverlay();
+  history.pushState({ k: 2 }, '', location.href);
+});
+
+/* ---------- 後端：分派與資料傳送 ---------- */
+function backendReady() { return /^https:\/\//.test(C.meta.gasUrl || ''); }
+function postJSON(body) {   // text/plain：不觸發 CORS 預檢
+  return fetch(C.meta.gasUrl, { method: 'POST', redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json(); });
+}
+function device() {
+  return { userAgent: navigator.userAgent, screenW: window.screen.width, screenH: window.screen.height,
+           viewportW: window.innerWidth, viewportH: window.innerHeight, dpr: window.devicePixelRatio || 1 };
+}
+function pickAnswers(prefixes) {
+  var o = {};
+  Object.keys(S.answers).forEach(function (k) {
+    if (prefixes.some(function (p) { return k.indexOf(p) === 0; })) o[k] = S.answers[k];
+  });
+  return o;
+}
+
+// 讀完基礎教材時呼叫。已取得編號就不再分派（重新整理、斷線重連都一樣）
+function allocate(ok, fail) {
+  if (S.pid && S.group) return ok();
+  if (DEMO) { S.group = P_GROUP || (Math.random() < 0.5 ? 'ai' : 'none'); S.pid = 'DEMO'; save(); return ok(); }
+  if (!backendReady()) {
+    if (!TEST) return fail('no_backend_url');
+    S.group = P_GROUP || (Math.random() < 0.5 ? 'ai' : 'none'); S.pid = 'TLOCAL'; S.noBackend = true;   // 測試且還沒設網址：只在本機跑
+    save(); return ok();
+  }
+  var body = { id: uuid(), type: 'allocate', clientId: S.uid, mode: S.mode, pilot: S.flags.pilot,
+    forcedGroup: P_GROUP, sentAt: Date.now(),
+    data: Object.assign({ sex: S.answers.pre1_1, under18: S.flags.under18, attention_pre: S.flags.attention_pre,
+                          consentAt: S.consentAt, startedAt: S.createdAt }, device(), pickAnswers(['pre1_', 'pre2_'])) };
+  postJSON(body).then(function (res) {
+    if (res && res.ok && res.participantId && res.group) {
+      S.pid = res.participantId; S.group = res.group; S.allocPosition = res.position; S.assignedAt = Date.now();
+      save(); ok();
+    } else fail((res && res.error) || 'unknown');
+  }).catch(function () { fail('network'); });
+}
+
+// 待傳佇列：先存 localStorage，依序送出；每 10 秒或恢復連線時重送
+var Q = loadJSON(localStorage, QUEUE_KEY) || [];
+var flushing = false, lastSendError = null;
+function saveQ() { saveJSON(localStorage, QUEUE_KEY, Q); }
+function enqueue(type, data) {
+  if (DEMO || S.noBackend) return;
+  Q.push({ id: uuid(), type: type, clientId: S.uid, participantId: S.pid, mode: S.mode, pilot: S.flags.pilot,
+           sentAt: Date.now(), data: data });
+  saveQ(); flush();
+}
+function flush() {
+  if (flushing || !Q.length || !backendReady()) return;
+  flushing = true;
+  postJSON(Q[0]).then(function (res) {
+    flushing = false;
+    if (res && res.ok) { Q.shift(); saveQ(); lastSendError = null; flush(); }   // 重複的 id 後端也回 ok
+    else lastSendError = (res && res.error) || 'unknown';
+  }).catch(function () { flushing = false; lastSendError = 'network'; });
+}
+setInterval(flush, 10000);
+window.addEventListener('online', flush);
+
+/* =====================================================================
+ * 畫面
+ * ===================================================================== */
+function render() {
+  switch (S.stage) {
+    case 'consent': return rConsent();
+    case 'declined': return rDeclined();
+    case 'pre1': return rSurvey('pre1', function () {
+      var age = parseInt(S.answers.pre1_2, 10);
+      S.flags.under18 = !isNaN(age) && age < C.meta.minAge ? 1 : 0;
+      go('pre2');
+    });
+    case 'pre2': return rSurvey('pre2', function () {
+      S.flags.attention_pre = S.answers['pre2_se_6'] === 2 ? 1 : 0;
+      go('material');
+    });
+    case 'material': return rMaterial();
+    case 'scenario': return rScenario();
+    case 'instructions': return rInstructions();
+    case 'node': return rNode();
+    case 'simEnd': return rSimEnd();
+    case 'post1': return rSurvey('post1', function () {
+      S.flags.attention_post = S.answers['post1_se_6'] === 2 ? 1 : 0;
+      go('post2');
+    });
+    case 'post2': return rSurvey('post2', function () {
+      S.postAt = Date.now();
+      enqueue('post', Object.assign({ attention_post: S.flags.attention_post,
+        attention_pass: S.flags.attention_pre === 1 && S.flags.attention_post === 1 ? 1 : 0,
+        postAt: S.postAt }, pickAnswers(['post1_', 'post2_'])));
+      go('debrief', { debriefIdx: 0 });
+    });
+    case 'debrief': return rDebrief();
+    case 'finished': return rFinished(S.pid);
+    default: S = fresh(); return rConsent();
+  }
+}
+
+/* ---------- 知情同意 ---------- */
+function rConsent() {
+  var c = C.consent;
+  screen({
+    top: topbar(c.header, c.headerRight),
+    body: [
+      h('h1', null, c.title),
+      h('p', null, c.intro),
+      h('div', { class: 'card list' }, c.items.map(function (it) {
+        return h('div', { class: 'li' }, h('strong', null, it.label), h('span', { class: 'sep' }, '｜'), fill(it.text));
+      })),
+      h('p', { class: 'muted' }, c.statement),
+      h('button', { type: 'button', class: 'link', onclick: openFullConsent }, c.fullTextLinkLabel)
+    ],
+    footer: [btn(c.agree, agree), btn(c.disagree, disagree, 'secondary')]
+  });
+}
+function agree() { S.consented = true; S.consentAt = Date.now(); go('pre1'); }
+function disagree() { S = fresh(); try { localStorage.removeItem(KEY); } catch (e) {} go('declined'); }
+function openFullConsent() {
+  var f = C.consent.full;
+  var body = [h('h1', null, f.title), paras(f.metaLines, 'muted'), paras(f.greeting)];
+  f.sections.forEach(function (sec) {
+    body.push(h('h2', { class: 'sec' }, sec.title));
+    body.push(paras(sec.paragraphs));
+    if (sec.orderedList) body.push(h('ol', null, sec.orderedList.map(function (t) { return h('li', null, fill(t)); })));
+    if (sec.after) body.push(paras(sec.after));
+    if (sec.bullets) body.push(h('ul', null, sec.bullets.map(function (t) { return h('li', null, fill(t)); })));
+  });
+  overlay(C.consent.headerRight, body, [btn(f.agree, agree), btn(f.disagree, disagree, 'secondary')]);
+}
+function rDeclined() {
+  var d = C.declined;
+  screen({ kicker: d.header, body: [h('h1', null, d.title), paras(d.paragraphs)],
+           footer: [btn(d.button, function () { go('consent'); }, 'secondary')] });
+}
+
+/* ---------- 問卷 ---------- */
+var errIds = {};
+function answered(id) { var v = S.answers[id]; return v != null && v !== ''; }
+function isOff(q) {   // 條件題：不需作答時變灰、不可點
+  return q.showIf ? S.answers[q.showIf.id] === q.showIf.notEquals : false;
+}
+function clearErr(card, id) {
+  delete errIds[id];
+  card.classList.remove('err');
+  var m = card.querySelector('.errmsg'); if (m) m.remove();
+}
+function qCard(q, num, scaleLabels) {
+  var a = S.answers, off = isOff(q);
+  if (off) { delete a[q.id]; delete a[q.id + '_other']; }
+  var card = h('div', { class: 'qcard' + (off ? ' off' : '') + (errIds[q.id] ? ' err' : ''), 'data-qid': q.id },
+    h('div', { class: 'qtext' }, num + '. ' + q.text));
+
+  if (q.type === 'single') {
+    var wrap = h('div', { class: 'chips', role: 'radiogroup' });
+    q.options.forEach(function (o) {
+      var sel = a[q.id] === o.v;
+      wrap.appendChild(h('button', {
+        type: 'button', class: 'chip' + (sel ? ' sel' : ''), role: 'radio', 'aria-checked': sel ? 'true' : 'false', disabled: off,
+        onclick: function () {
+          a[q.id] = o.v;
+          if (!o.other) delete a[q.id + '_other'];
+          delete errIds[q.id];
+          save(); rerender();
+        }
+      }, h('span', { class: 'radio' }), o.label));
+    });
+    card.appendChild(wrap);
+    var so = q.options.filter(function (o) { return o.v === a[q.id]; })[0];
+    if (so && so.other) {
+      card.appendChild(h('input', { class: 'txt', type: 'text', placeholder: C.ui.otherPlaceholder, value: a[q.id + '_other'] || '',
+        oninput: function (e) { a[q.id + '_other'] = e.target.value; save(); } }));
+    }
+  } else if (q.type === 'scale7') {
+    var row = h('div', { class: 'scale', role: 'radiogroup' });
+    for (var i = 1; i <= 7; i++) (function (i) {
+      var sel = a[q.id] === i;
+      row.appendChild(h('button', {
+        type: 'button', class: 'sbtn' + (sel ? ' sel' : ''), role: 'radio', 'aria-checked': sel ? 'true' : 'false',
+        'aria-label': String(i),
+        onclick: function () {
+          a[q.id] = i; save();
+          Array.prototype.forEach.call(row.children, function (b, k) {
+            b.classList.toggle('sel', k === i - 1); b.setAttribute('aria-checked', k === i - 1 ? 'true' : 'false');
+          });
+          clearErr(card, q.id);
+        }
+      }, String(i)));
+    })(i);
+    card.appendChild(row);
+    card.appendChild(h('div', { class: 'anchors' }, h('span', null, scaleLabels.min), h('span', null, scaleLabels.max)));
+  } else if (q.type === 'number') {
+    card.appendChild(h('div', { class: 'numrow' },
+      h('input', { class: 'txt', type: 'text', inputmode: 'numeric', maxlength: '3', value: a[q.id] || '',
+        oninput: function (e) {
+          var v = e.target.value.replace(/\D/g, ''); e.target.value = v; a[q.id] = v; save();
+          if (v) clearErr(card, q.id);
+        } }),
+      q.unit ? h('span', null, q.unit) : null));
+  } else if (q.type === 'text') {
+    card.appendChild(h('textarea', { class: 'txt', placeholder: q.placeholder || '', value: a[q.id] || '',
+      oninput: function (e) { a[q.id] = e.target.value; save(); } }));
+  }
+  if (errIds[q.id]) card.appendChild(h('div', { class: 'errmsg' }, C.ui.requiredHint));
+  return card;
+}
+function validate(questions) {
+  errIds = {};
+  var missing = questions.filter(function (q) { return q.required && !isOff(q) && !answered(q.id); });
+  if (!missing.length) return true;
+  missing.forEach(function (q) { errIds[q.id] = 1; });
+  rerender();
+  var first = document.querySelector('[data-qid="' + missing[0].id + '"]');
+  if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  return false;
+}
+function rSurvey(key, onNext) {
+  var sv = C.surveys[key], body = [h('h1', null, sv.title)], questions = [], n = 0;
+  if (sv.intro) body.push(h('p', { class: 'muted' }, sv.intro));
+  var instr = sv.instructions === 'SAME_AS_PRE2' ? C.surveys.pre2.instructions : sv.instructions;
+  body.push(paras(instr, 'muted'));
+  function add(qs, labels) {
+    qs.forEach(function (q) {
+      if (q.aiOnly && S.group !== 'ai') return;
+      n++; questions.push(q); body.push(qCard(q, n, labels || sv.scaleLabels));
+    });
+  }
+  if (sv.sections) {
+    sv.sections.forEach(function (sec) {
+      if (sec.aiOnly && S.group !== 'ai') return;
+      if (sec.title) body.push(h('h2', { class: 'sec' }, sec.title));
+      if (sec.instruction) body.push(h('p', { class: 'muted' }, sec.instruction));
+      add(sec.questions, sec.scaleLabels);
+    });
+  } else if (sv.questions === 'SE_ITEMS') {
+    add(C.seItems.map(function (q) { var c = {}; for (var k in q) c[k] = q[k]; c.id = key + '_' + q.id; return c; }));
+  } else add(sv.questions);
+  screen({ top: topbar(sv.header, sv.progress), body: body,
+           footer: [btn(sv.button, function () { if (validate(questions)) { errIds = {}; onNext(); } })] });
+}
+
+/* ---------- 教材、情境、作答說明 ---------- */
+function rMaterial() {
+  var m = C.material, body = [];
+  m.sections.forEach(function (s, i) {
+    body.push(h('h1', i ? { style: 'margin-top:30px' } : null, s.title));
+    body.push(paras(s.paragraphs));
+  });
+  screen({ top: topbar(m.header), body: body,
+           footer: [startAlloc(m.button)] });
+}
+function startAlloc(label) {   // 按下後先分派，成功才進入情境說明
+  var b = btn(label, function () {
+    b.disabled = true; b.textContent = C.ui.busy;
+    allocate(function () { go('scenario'); }, rAllocError);
+  });
+  return b;
+}
+function rAllocError(err) {   // 序列用完或分派失敗
+  var e = C.allocError;
+  screen({ kicker: e.header, body: [h('h1', null, e.title), paras(e.paragraphs), h('p', { class: 'muted' }, '代碼：' + err)],
+           footer: [startAlloc(e.retry)] });
+}
+function rScenario() {
+  var s = C.scenario;
+  screen({ kicker: s.header, body: [h('h1', null, s.title), paras(s.paragraphs)],
+           footer: [btn(s.button, function () { go('instructions'); })] });
+}
+function rInstructions() {
+  var s = C.instructions, body = [h('h1', null, s.title), paras(s.paragraphs)];
+  if (S.group === 'ai') body.push(h('div', { class: 'aibox sec-ai' },
+    h('div', { class: 'ailabel' }, s.aiSection.title), h('p', null, s.aiSection.text)));
+  screen({ kicker: s.header, body: body,
+           footer: [btn(s.button, function () { go('node', { nodeIdx: 0, nodeStep: 'read' }); })] });
+}
+
+/* ---------- 評量節點 ----------
+ * 步驟：read（閱讀對話＋AI 提示）→ judge（風險判斷，可回看）→ respond（選擇回應）→ reply（角色回覆與匯合）
+ * 計時一律用 performance.now()，毫秒取整數。T 只存在記憶體；算好的時長寫進 S.nodes[節點代號]。
+ * 重新整理時 performance.now() 會歸零，該步驟從重新顯示時起算，並在 reloads 記一次。
+ */
+var T = {};            // 本節點進行中的計時起點
+var reviewing = false; // 判斷時是否在回看對話
+function now() { return performance.now(); }
+function ms(x) { return Math.round(x); }
+function curNode() { return C.nodes[S.nodeIdx]; }
+function rec() { return S.nodes[curNode().id]; }
+function ensureRec(nd) {
+  if (!S.nodes[nd.id]) {
+    var ai = S.group === 'ai';
+    S.nodes[nd.id] = {
+      order: S.nodeIdx + 1, nodeId: nd.id, type: nd.type, group: S.group,
+      promptId: ai ? nd.promptId : null, promptVersion: ai ? C.meta.promptVersion : null,
+      animTime: null, readTime: null, promptTime: null,
+      rt: null, reviewCount: 0, reviewTime: 0,
+      judgment: null, correct: null, response: null, branch: null, responseTime: null,
+      hiddenCount: 0, hiddenTime: 0, reloads: 0, startedAt: Date.now(), endedAt: null
+    };
+  }
+  return S.nodes[nd.id];
+}
+function chatHead() {
+  return h('header', { class: 'chathead' },
+    h('div', { class: 'avatar', 'aria-hidden': 'true' }, C.meta.characterName),
+    h('div', { class: 'who' }, h('div', { class: 'name' }, C.meta.characterName),
+      h('div', { class: 'status' }, h('span', { class: 'dot' }), C.meta.characterStatus)),
+    h('div', { class: 'prog' }, (S.nodeIdx + 1) + ' / ' + N));
+}
+function narr(t) { return h('div', { class: 'narr' }, t); }
+function rBubble(t) { return h('div', { class: 'bubble r' }, t); }
+function chatItems(nd) { return [narr(nd.background)].concat(nd.messages.map(rBubble)); }
+function aiBox(nd) {
+  return h('div', { class: 'aibox inchat', role: 'note' },
+    h('div', { class: 'ailabel' }, C.ui.aiPromptLabel), h('p', null, C.prompts[nd.promptId]));
+}
+function scrollBottom() { var m = mainEl(); if (m) m.scrollTop = m.scrollHeight; }
+function setStep(step) { S.nodeStep = step; reviewing = false; screenStart = Date.now(); save(); render(); }
+
+// 「輸入中…」→ 訊息。cb 在訊息出現時呼叫
+function typeIn(container, text, delay, cb) {
+  var typing = h('div', { class: 'bubble r typing', 'aria-live': 'polite' }, C.ui.typing);
+  later(function () { container.appendChild(typing); scrollBottom(); }, delay);
+  later(function () {
+    typing.replaceWith(rBubble(text)); scrollBottom(); if (cb) cb();
+  }, delay + C.meta.messageIntervalMs);
+}
+
+function rNode() {
+  var nd = curNode(), r = ensureRec(nd), ai = S.group === 'ai', ui = C.ui;
+
+  switch (S.nodeStep) {
+
+    /* 1–2. 閱讀對話（＋AI 提示） */
+    case 'read': {
+      var chat = h('div', null, narr(nd.background));
+      var box = ai ? aiBox(nd) : null;
+      var startBtn = btn(ui.startJudge, function () {
+        var t = now();
+        r.readTime = ms(t - T.lastMsgAt);
+        if (ai) r.promptTime = T.promptSeenAt != null ? ms(t - T.promptSeenAt) : null;
+        if (T.io) T.io.disconnect();
+        save(); setStep('judge');
+      });
+      startBtn.style.visibility = 'hidden';
+      if (box) box.classList.add('hidden');
+      screen({ top: chatHead(), mainClass: 'chat', body: [chat, box], footer: [startBtn] });
+
+      var allShown = function () {
+        T.lastMsgAt = now();
+        if (box) {   // 提示框真的進入畫面才起算
+          box.classList.remove('hidden'); scrollBottom();
+          T.promptSeenAt = null;
+          T.io = new IntersectionObserver(function (es) {
+            es.forEach(function (e) {
+              if (e.isIntersecting && T.promptSeenAt == null) { T.promptSeenAt = now(); T.io.disconnect(); }
+            });
+          }, { root: mainEl(), threshold: 0.5 });
+          T.io.observe(box);
+        }
+        startBtn.style.visibility = 'visible';
+      };
+
+      if (S.revealed[nd.id]) {          // 重新整理後：直接顯示全部訊息
+        nd.messages.forEach(function (m) { chat.appendChild(rBubble(m)); });
+        allShown();
+      } else {
+        T.animStart = now();
+        nd.messages.forEach(function (m, i) {
+          var last = i === nd.messages.length - 1;
+          typeIn(chat, m, C.meta.messageIntervalMs * i, last ? function () {
+            r.animTime = ms(now() - T.animStart);
+            S.revealed[nd.id] = Date.now(); save();
+            allShown();
+          } : null);
+        });
+      }
+      return;
+    }
+
+    /* 3. 風險判斷（可回看對話） */
+    case 'judge': {
+      if (T.judgeStart == null) T.judgeStart = now();
+      var sel = S.tmpJudge[nd.id];
+
+      if (reviewing) {
+        screen({ top: chatHead(), banner: h('div', { class: 'banner' }, ui.reviewBanner),
+                 mainClass: 'chat', body: [chatItems(nd), ai ? aiBox(nd) : null],
+                 footerClass: 'row',
+                 footer: [btn('‹ ' + ui.backToJudge, function () {
+                   r.reviewTime += ms(now() - T.reviewStart); T.reviewStart = null;
+                   reviewing = false; save(); render();
+                 }, 'secondary')] });
+        return;
+      }
+
+      screen({
+        top: chatHead(), kicker: ui.judgeLabel,
+        body: [h('div', { class: 'question' }, C.judgment.question),
+          C.judgment.options.map(function (o) {
+            return h('button', { type: 'button', class: 'opt' + (sel === o.v ? ' sel' : ''), role: 'radio',
+              'aria-checked': sel === o.v ? 'true' : 'false',
+              onclick: function () { S.tmpJudge[nd.id] = o.v; save(); rerender(); } },
+              h('span', { class: 'radio' }), o.label);
+          })],
+        footerClass: 'row',
+        footer: [btn('‹ ' + ui.reviewChat, function () {
+                   r.reviewCount++; T.reviewStart = now(); reviewing = true; save(); render();
+                 }, 'secondary'),
+                 btn(ui.submitJudge, function () {
+                   r.rt = ms(now() - T.judgeStart);
+                   r.judgment = S.tmpJudge[nd.id];
+                   r.correct = nd.key == null ? null : (r.judgment === nd.key ? 1 : 0);
+                   save(); setStep('respond');
+                 }, 'primary', sel == null)]
+      });
+      return;
+    }
+
+    /* 4. 選擇回應 */
+    case 'respond':
+      if (T.respStart == null) T.respStart = now();
+      screen({ top: chatHead(), mainClass: 'chat', body: chatItems(nd),
+               footer: [h('div', { class: 'footer-label' }, ui.responseLabel),
+                 nd.responses.map(function (x, i) {
+                   return h('button', { type: 'button', class: 'resp', onclick: function () {
+                     r.responseTime = ms(now() - T.respStart);
+                     r.response = i + 1; r.branch = x.id;
+                     save(); setStep('reply');
+                   } }, x.text);
+                 })] });
+      scrollBottom();
+      return;
+
+    /* 5. 角色回覆與匯合 */
+    case 'reply': {
+      var x = nd.responses[r.response - 1];
+      var chat2 = h('div', null, chatItems(nd), h('div', { class: 'bubble me' }, x.text));
+      var nextBtn = btn(ui.nextNode, function () {
+        r.endedAt = Date.now(); T = {}; save();
+        enqueue('node', r);
+        if (S.nodeIdx < N - 1) { S.nodeIdx++; S.nodeStep = 'read'; go('node'); }
+        else go('simEnd');
+      });
+      nextBtn.style.visibility = 'hidden';
+      screen({ top: chatHead(), mainClass: 'chat', body: chat2, footer: [nextBtn] });
+      scrollBottom();
+      var showMerge = function () {
+        chat2.appendChild(narr(nd.merge)); scrollBottom();
+        S.replied[nd.id] = Date.now(); save();
+        nextBtn.style.visibility = 'visible';
+      };
+      if (S.replied[nd.id]) { chat2.appendChild(rBubble(x.reply)); showMerge(); }
+      else typeIn(chat2, x.reply, 0, function () { later(showMerge, C.meta.messageIntervalMs); });
+      return;
+    }
+  }
+}
+
+/* 節點進行中切到別的 App：記離開次數與總時長（rt 照常計算） */
+document.addEventListener('visibilitychange', function () {
+  if (unloading || S.stage !== 'node' || !S.nodes[curNode().id]) return;
+  var r = rec();
+  if (document.hidden) {
+    r.hiddenCount++; T.hiddenStart = now(); S.hiddenSinceWall = Date.now();
+  } else if (T.hiddenStart != null) {
+    r.hiddenTime += ms(now() - T.hiddenStart); T.hiddenStart = null; S.hiddenSinceWall = null;
+  }
+  save();
+});
+
+// 重新整理或關閉頁面也會觸發 hidden（各瀏覽器先後順序不同）；這種情況不算切到別的 App
+var unloading = false;
+window.addEventListener('pagehide', function () {
+  unloading = true;
+  if (S.stage === 'node' && S.nodes[curNode().id] && S.hiddenSinceWall) {
+    rec().hiddenCount--; S.hiddenSinceWall = null; save();
+  }
+});
+window.addEventListener('pageshow', function () { unloading = false; });
+
+/* ---------- 模擬結束、事後說明、完成 ---------- */
+function rSimEnd() {
+  var s = C.simEnd;
+  screen({ kicker: s.header, body: [h('h1', null, s.title), paras(s.paragraphs)],
+           footer: [btn(s.button, function () { go('post1'); })] });
+}
+function resourceCards() {
+  return C.debrief[2].resources.map(function (r) {
+    return h('div', { class: 'card' }, h('h3', null, r.title), h('div', null, r.text));
+  });
+}
+function rDebrief() {
+  var d = C.debrief[S.debriefIdx], body = [h('h1', null, d.title)], pending = false;
+  if (d.paragraphs) body.push(paras(d.paragraphs));
+  if (d.intro) body.push(h('p', null, d.intro));
+  if (d.cards) body.push(d.cards.map(function (c) { return h('div', { class: 'card' }, h('h3', null, c.title), h('div', null, c.text)); }));
+  if (d.outro) body.push(h('p', null, d.outro));
+  if (d.resources) {
+    body.push(resourceCards());
+    body.push(h('h2', { class: 'sec' }, d.contactTitle), d.contacts.map(function (t) { return h('div', null, t); }));
+    var pending = Q.length > 0 && !DEMO && !S.noBackend;   // 資料還沒送完：先不顯示編號
+    body.push(h('h2', { class: 'sec' }, d.dataTitle),
+      pending ? h('p', { class: 'card warm' }, C.ui.sending) : h('p', null, withPid(d.dataText, S.pid)));
+  }
+  var last = S.debriefIdx === C.debrief.length - 1;
+  screen({ kicker: d.header, body: body,
+           footer: [pending ? h('div', { class: 'footer-label', role: 'status' }, C.ui.sending) : null,
+                    btn(d.button, function () {
+             if (!last) go('debrief', { debriefIdx: S.debriefIdx + 1 });
+             else finish();
+           }, 'primary', pending)] });
+  if (pending) {
+    flush();
+    later(function check() { if (!Q.length) rerender(); else { flush(); later(check, 1000); } }, 1000);
+  }
+}
+function finish() {
+  S.finishedAt = Date.now();
+  enqueue('finish', { finishedAt: S.finishedAt, totalTimeSec: Math.round((S.finishedAt - S.consentAt) / 1000) });
+  if (DEMO) {   // 體驗模式：不記錄已完成，重新整理就能再玩一次
+    go('finished');
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    return;
+  }
+  saveJSON(localStorage, DONE_KEY, { pid: S.pid, at: S.finishedAt });
+  try { sessionStorage.setItem(SESSION_FIN, '1'); } catch (e) {}
+  go('finished');
+}
+function rFinished(pid) {
+  var f = C.finished;
+  screen({ kicker: f.header, body: [
+    h('h1', null, f.title), paras(f.paragraphs),
+    h('div', { class: 'card warm' }, h('h3', null, fill(f.rewardCard.title)), h('div', null, f.rewardCard.text)),
+    h('div', { class: 'card' }, h('div', null, f.pidCard.pidLabel + ' ', h('strong', null, pid || '—')), h('div', null, f.pidCard.text)),
+    paras(f.after)
+  ] });   // 沒有任何按鈕
+}
+function rAlreadyDone(pid) {
+  var d = C.alreadyDone;
+  screen({ kicker: d.header, body: [
+    h('h1', null, d.title), paras(d.paragraphs),
+    h('div', { class: 'card' }, h('div', null, d.card.pidLabel + ' ', h('strong', null, pid || '—')),
+      d.card.lines.map(function (t) { return h('div', null, t); })),
+    paras(d.after),
+    h('button', { type: 'button', class: 'link', onclick: function () {
+      overlay(C.debrief[2].title, [h('h1', null, C.debrief[2].title), resourceCards()]);
+    } }, d.resourcesLinkLabel)
+  ] });
+}
+
+/* =====================================================================
+ * 測試面板（?debug=1）
+ * ===================================================================== */
+function debugPanel() {
+  var todo = (JSON.stringify(C).match(/【待補】/g) || []).length;
+  var box = h('div', { id: 'dbg' });
+  var head = h('div', { class: 'sum', onclick: function () { box.classList.toggle('open'); } });   // 點一下展開或收合
+  var info = h('div');
+  var sel = h('select', null, h('option', { value: '' }, '跳到節點…'),
+    C.nodes.map(function (n, i) { return h('option', { value: i }, n.id + '（' + n.type + '）'); }));
+  sel.addEventListener('change', function () {
+    if (sel.value === '') return;
+    S.consented = true;
+    if (!S.pid) {   // 跳節點沒有前測資料，不送後端
+      S.group = P_GROUP || (Math.random() < 0.5 ? 'ai' : 'none'); S.pid = 'TLOCAL'; S.noBackend = true;
+    }
+    S.nodeIdx = +sel.value; S.nodeStep = 'read'; sel.value = ''; T = {};
+    go('node');
+  });
+  var reset = h('button', { type: 'button', onclick: function () {
+    try { localStorage.removeItem(KEY); localStorage.removeItem(DONE_KEY); localStorage.removeItem(QUEUE_KEY);
+          sessionStorage.removeItem(SESSION_FIN); } catch (e) {}
+    location.reload();
+  } }, '清除進度');
+  var json = h('button', { type: 'button', onclick: showJSON }, 'JSON');
+  var send = h('button', { type: 'button', onclick: flush }, '立即送出');
+  var body = h('div', { class: 'body' }, info, sel, reset, json, send,
+    !DEMO && !backendReady() ? h('div', { class: 'warn' }, '尚未設定 gasUrl') : null,
+    todo ? h('div', { class: 'warn' }, 'CONFIG 還有 ' + todo + ' 處【待補】') : null);
+  box.appendChild(head); box.appendChild(body);
+  document.body.appendChild(box);
+  setInterval(function () {
+    var nd = S.stage === 'node' ? curNode().id + ' · ' + S.nodeStep : '—';
+    var sec = ((Date.now() - screenStart) / 1000).toFixed(1);
+    head.textContent = (box.classList.contains('open') ? '▴ ' : '▾ ') + (S.group || '未分派') + ' | ' +
+      (S.stage === 'node' ? curNode().id + ' ' + S.nodeStep : S.stage) + ' | ' + sec + 's';
+    info.innerHTML = '';
+    append(info, [
+      h('div', null, '模式：' + S.mode + (S.flags.pilot ? '＋pilot' : '') + (S.noBackend ? '（不送後端）' : '')),
+      h('div', null, '組別：' + (S.group || '未分派') + (P_GROUP ? '（網址指定）' : '')),
+      h('div', null, '編號：' + (S.pid || '—')),
+      h('div', null, '待傳：' + Q.length + ' 筆' + (lastSendError ? '｜錯誤：' + lastSendError : '')),
+      h('div', null, '階段：' + S.stage),
+      h('div', null, '節點：' + nd),
+      h('div', null, '本畫面：' + sec + ' s'),
+      h('div', null, '全程：' + (S.consentAt ? ((Date.now() - S.consentAt) / 1000).toFixed(0) + ' s' : '—')),
+      h('div', null, liveTimer())
+    ]);
+  }, 250);
+}
+
+function liveTimer() {   // 進行中的計時（秒）
+  if (S.stage !== 'node') return '';
+  var t = now(), f = function (x) { return ((t - x) / 1000).toFixed(1) + ' s'; };
+  if (S.nodeStep === 'read' && T.lastMsgAt != null) return 'read 計時：' + f(T.lastMsgAt) + (T.promptSeenAt != null ? '｜prompt：' + f(T.promptSeenAt) : '');
+  if (S.nodeStep === 'judge' && T.judgeStart != null) return 'rt 計時：' + f(T.judgeStart) + (reviewing ? '｜回看中：' + f(T.reviewStart) : '');
+  if (S.nodeStep === 'respond' && T.respStart != null) return 'response 計時：' + f(T.respStart);
+  return '';
+}
+function showJSON() {
+  var data = { queue: Q, pid: S.pid, group: S.group, mode: S.mode, uid: S.uid, flags: S.flags, stage: S.stage, nodeIdx: S.nodeIdx, nodeStep: S.nodeStep,
+               nodes: S.nodes, answers: S.answers };
+  var text = JSON.stringify(data, null, 2);
+  var pre = h('pre', { style: 'font:13px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all;margin:0' }, text);
+  overlay('紀錄（JSON）', pre, [btn('複製', function () {
+    try { navigator.clipboard.writeText(text); } catch (e) {}
+  }, 'secondary')]);
+}
+
+/* ---------- 啟動 ---------- */
+(function start() {
+  var done = loadJSON(localStorage, DONE_KEY);
+  var finThisSession = false;
+  try { finThisSession = sessionStorage.getItem(SESSION_FIN) === '1'; } catch (e) {}
+  if (done) {
+    if (finThisSession) rFinished(done.pid);   // 剛完成後重新整理：仍顯示感謝頁
+    else rAlreadyDone(done.pid);               // 之後再開啟：已完成頁
+  } else {
+    if (S.stage === 'node' && S.nodes[curNode().id]) {
+      var r0 = S.nodes[curNode().id];
+      r0.reloads++;                                   // 這一步的計時從重新顯示時起算
+      if (S.hiddenSinceWall) {                        // 切走後頁面被系統關掉：用時鐘補算離開時間
+        r0.hiddenTime += Date.now() - S.hiddenSinceWall; r0.hiddenTimeApprox = 1; S.hiddenSinceWall = null;
+      }
+      save();
+    }
+    render();
+  }
+  if (DEBUG) debugPanel();
+  flush();   // 上次沒送完的資料
+})();
+
+})();
+</script>
+</body>
+</html>
