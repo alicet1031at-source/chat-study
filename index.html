@@ -18,7 +18,7 @@ const CONFIG = {
   meta: {
     appName: "遇見 Meetoo",
     studyTitle: "AI風險線索提示對大專校院學生數位親密關係風險辨識之影響：以模擬交友軟體聊天情境為例",
-    configVersion: "2026-11-26d",
+    configVersion: "v2",           // 系統版本：前導測試＝v1（試算表此欄空白）、依前導結果修訂後＝v2；會寫進 participants 與 nodes
     promptVersion: "v1"            // AI 提示版本；改了提示文字就換版本號，紀錄會一起存
   },
 
@@ -38,6 +38,7 @@ const CONFIG = {
     aiPromptLabel: "AI 提示",                                   // 畫面圖
     btnReadDone: "我讀完了",                                    // 畫面圖
     btnStartJudge: "開始判斷",                                  // 畫面圖
+    btnTipDone: "我看完了",                                     // v2：AI 提示下方的按鈕，按下後才能「開始判斷」
     judgeHeader: "風險判斷",                                    // 畫面圖
     btnReview: "回看對話",                                      // 畫面圖
     btnSubmitJudge: "提交判斷",                                 // 畫面圖
@@ -212,11 +213,16 @@ const CONFIG = {
       { icon: "🤷", label: "資訊不足，尚無法判定", explain: "你覺得光看這段對話還說不準。" },
       { icon: "🚨", label: "已有明確風險線索", explain: "你覺得對話裡有需要自己特別小心的地方。" }
     ],
-    body: "每個情境都只看兩人在當下對話裡的互動；如果你對 R 整體的印象和當下的判斷不同，以當下情境為準。作答沒有時間限制，判斷時若想重讀對話，按畫面左下角的「回看對話」，讀完再按「返回判斷」回到題目。提交後不顯示答案，請自行判斷。",
+    scopeTitle: "判斷時只看兩件事：",                              // 粗體小標
+    scopePoints: [                                               // 條列
+      "只看當下情境對話，不用猜對方之後的行為。",
+      "判斷重點是對方有沒有想左右你的決定；見面、交換聯絡方式安全性問題，不在判斷範圍。"
+    ],
+    note: "沒有時間限制。想重讀對話，可按左下角「回看對話」。提交後不會顯示答案。",   // 灰色小字
     // 僅 AI 提示組：接在 body 之後、按鈕之前
     aiSection: {
       title: "關於 AI 提示",
-      body: "每段對話之後，會出現一則標示為「AI 提示」的文字。它是由 AI 產生的固定內容，提醒你這段對話裡可以留意的地方。提示不會告訴你答案，要不要參考、怎麼判斷，都由你決定。"
+      body: "每段對話之後，會出現一則標示為「AI 提示」的文字。它是由 AI 產生的固定內容，提醒你這段對話裡可以留意的地方。提示不會告訴你答案，要不要參考、怎麼判斷，都由你決定。讀完提示後，請按「我看完了」再開始判斷。"
     },
     btnNext: "開始"
   },
@@ -349,8 +355,8 @@ const CONFIG = {
       background: "前陣子R提過想視訊聊天，當時你說想再等等，R回了「好」。今天R又提起這件事。",
       messages: [
         "上次你說視訊想再等等",
-        "我們聊一陣子了～可以視訊了？",
-        "有時候會覺得只有我在拉近彼此距離🥹"
+        "我們也聊一陣子了～這週可以視訊嗎？",
+        "沒有要逼你啦～只是有點失落🥹"
       ],
       responses: [
         { id: "A", text: "感覺可以這週找一天～", reply: "好😄" },
@@ -446,10 +452,9 @@ const CONFIG = {
       id: "C14", title: "對照片與穿著設限", type: "risk", key: 3, promptId: "P7",
       background: "你在交友軟體的個人檔案多放了一張和朋友去游泳的照片。兩人仍未正式交往。",
       messages: [
-        "你新放的那張泳裝照...沒必要吧",
-        "這種照片不要放啦",
-        "我不喜歡別人看到你這樣",
-        "刪掉好不好～"
+        "你跟朋友去游泳喔？",
+        "怎麼不約我去？",
+        "我不喜歡別人看到你穿這樣！可以刪掉ㄇ..."
       ],
       responses: [
         { id: "A", text: "好啦我等等刪掉", reply: "好" },
@@ -860,6 +865,15 @@ p{margin:0 0 12px}
 
 .nb{white-space:nowrap}
 
+/* 作答說明：判斷範圍與附註 */
+.scope-t{font-weight:700;margin:4px 0 6px}
+.scope{margin:0 0 12px;padding-left:22px}
+.scope li{margin-bottom:6px}
+.note{color:var(--muted);font-size:16px;margin:0 0 16px}
+
+/* v2：AI 提示下方的「我看完了」 */
+.tipbtn{margin-top:12px;min-height:46px;background:#fff;border:1.5px solid var(--tip-line);color:var(--tip-pill)}
+
 </style>
 </head>
 <body>
@@ -1016,6 +1030,7 @@ p{margin:0 0 12px}
     var a = state.answers;
     post({
       action: "assign", id: state.clientId, clientId: state.clientId, test: TEST, forceGroup: FORCE_GROUP,
+      configVersion: CONFIG.meta.configVersion,
       sex: a.pre2.BG1, startedAt: state.startedAt, pre1: a.pre1, pre2: a.pre2,
       device: { userAgent: navigator.userAgent, screenW: screen.width, screenH: screen.height }
     }).then(function (res) {
@@ -1055,8 +1070,8 @@ p{margin:0 0 12px}
   function sparkle() {
     return '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2l2.2 6.6L21 11l-6.8 2.4L12 20l-2.2-6.6L3 11l6.8-2.4z"/></svg>';
   }
-  function aiTip(text) {
-    return '<div class="aitip"><span class="aipill">' + sparkle() + esc(CONFIG.ui.aiPromptLabel) + "</span><p>" + esc(text) + "</p></div>";
+  function aiTip(text, extra) {
+    return '<div class="aitip"><span class="aipill">' + sparkle() + esc(CONFIG.ui.aiPromptLabel) + "</span><p>" + esc(text) + "</p>" + (extra || "") + "</div>";
   }
 
   /* =====================================================================
@@ -1154,7 +1169,10 @@ p{margin:0 0 12px}
       body: '<p class="label">' + esc(s.header) + "</p><h1>" + esc(s.title) + "</h1><p>" + esc(s.lead) + "</p>" +
         '<div class="card">' + s.options.map(function (o) {
           return '<p class="optline">' + esc(o.icon) + " <b>" + esc(o.label) + "</b>：" + esc(o.explain) + "</p>";
-        }).join("") + "</div><p>" + esc(s.body) + "</p>" + ai,
+        }).join("") + "</div>" +
+        '<p class="scope-t">' + esc(s.scopeTitle) + '</p><ul class="scope">' +
+        s.scopePoints.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ul>" +
+        '<p class="note">' + esc(s.note) + "</p>" + ai,
       foot: primary(s.btnNext, "startNodes")
     });
   };
@@ -1190,6 +1208,7 @@ p{margin:0 0 12px}
       animTime: null, readTime: null, promptTime: null, preJudgeTime: null,
       rtTotal: null, reviewCount: 0, reviewTime: 0, rt: null, judgmentChanges: 0,
       responseTime: null, hiddenCount: 0, hiddenTime: 0, interrupted: 0,
+      configVersion: CONFIG.meta.configVersion,
       startedAt: new Date().toISOString(), endedAt: null
     };
   }
@@ -1235,7 +1254,7 @@ p{margin:0 0 12px}
   // AI 提示框真的出現在畫面上的時間點
   function watchTip() {
     if (tipObserver) { tipObserver.disconnect(); tipObserver = null; }
-    if (!(state.screen === "node" && state.step === "ready" && isAI()) || NT.tipVisibleAt != null) return;
+    if (!(state.screen === "node" && state.step === "ready" && isAI()) || state.tmp.tipDone || NT.tipVisibleAt != null) return;
     var el = document.querySelector(".aitip"); if (!el) return;
     if (!("IntersectionObserver" in window)) { NT.tipVisibleAt = pnow(); return; }
     tipObserver = new IntersectionObserver(function (entries) {
@@ -1314,7 +1333,16 @@ p{margin:0 0 12px}
     }
     // 2. AI 組出現提示（無 AI 組畫面不變）→ 開始判斷
     if (step === "ready") {
-      return shell({ top: chatTop(), bodyCls: "chat", body: chatLog(n), foot: (isAI() ? aiTip(tip) : "") + primary(ui.btnStartJudge, "startJudge") });
+      // AI 組：提示下方有「我看完了」，按下後「開始判斷」才可以按；無 AI 組照舊
+      if (isAI()) {
+        var done = !!t.tipDone;
+        return shell({
+          top: chatTop(), bodyCls: "chat", body: chatLog(n),
+          foot: aiTip(tip, done ? "" : '<button type="button" class="btn tipbtn" data-act="tipDone">' + esc(ui.btnTipDone) + "</button>") +
+            '<button type="button" class="btn btn-primary" data-act="startJudge"' + (done ? "" : " disabled") + ">" + esc(ui.btnStartJudge) + "</button>"
+        });
+      }
+      return shell({ top: chatTop(), bodyCls: "chat", body: chatLog(n), foot: primary(ui.btnStartJudge, "startJudge") });
     }
     // 3. 風險判斷（含回看對話）
     if (step === "judge") {
@@ -1655,10 +1683,16 @@ p{margin:0 0 12px}
         var t1 = pnow(); rec().readTime = ms(t1 - NT.lastMsgAt); NT.readDoneAt = t1;
         return setStep("ready");
       }
+      case "tipDone": {
+        // promptTime（v2）：AI 提示框進入畫面 → 按「我看完了」
+        var tt = pnow(), rt0 = rec();
+        rt0.promptTime = NT.tipVisibleAt != null ? ms(tt - NT.tipVisibleAt) : null;
+        state.tmp.tipDone = true; save(); render(); return;
+      }
       case "startJudge": {
+        if (isAI() && !state.tmp.tipDone) return;
         var t2 = pnow(), r2 = rec();
         r2.preJudgeTime = ms(t2 - NT.readDoneAt);
-        if (isAI()) r2.promptTime = NT.tipVisibleAt != null ? ms(t2 - NT.tipVisibleAt) : null;
         NT.judgeStart = t2; NT.reviewAcc = 0;
         return setStep("judge");
       }
